@@ -232,9 +232,8 @@ int main(int argc, char **argv) {
   }
 
   vector<string> lines_blacklist = read_lines(infile_blacklist);
-  int num_lines_blacklist = lines_blacklist.size();
 
-  printf("Total lines: %d\n", num_lines_blacklist);
+  printf("Total lines: %ld\n", lines_blacklist.size());
   
   infile_blacklist.close();
 
@@ -250,6 +249,8 @@ int main(int argc, char **argv) {
       //////////////////////cout << lines[i] << "\t" << ip_string_to_key(lines[i]) << endl;
     }
   }
+
+  lines_blacklist.clear();
 
   //////////////////check duplicates
 
