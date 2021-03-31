@@ -6,7 +6,7 @@
 #include <map>
 #include <time.h>
 #include <limits.h>
-#include <random> // http://en.cppreference.com/w/cpp/numeric/random
+#include <random>
 #include <algorithm>
 
 #include <fstream>
@@ -14,12 +14,19 @@
 
 using namespace std;
 
-int num_way=2;      //# of ways (hash functions)
-int num_cells=4;  //# of slots in a rows
+const int num_way=2;      //# of ways (hash functions)
+const int num_cells=4;  //# of slots in a rows
+
 int ht_size=40000; //# of rows
 int f=10; //# of fingerprint bits
 
-map<int64_t,int> S_map;
+const bool allow_fp = true; //allow false positives
+const int restart_limit = 2; //max restart value
+
+string file_blacklist;
+string file_whitelist;
+
+int seed = 12342; //random seed
 
 
 //generate a fingerprint
@@ -119,111 +126,153 @@ string ip_key_to_string(int64_t key){ // required key format xxxx (x: 000-255)
 }
 
 
-////////////////////////////////////////////////////////////////
-string genString(uint64_t val){
-  string str;
-  str+=(unsigned int)val;
-  
-  return str;
+//program usage
+void print_usage() {
+   printf("Usage:\n");
+   printf(" *** MANDATORY ***\n");
+   printf(" -b blacklist: input blacklist file\n");
+   printf(" -w whitelist: input whitelist file\n");
+   printf(" *** OPTIONAL ***\n");
+   printf(" -m tsize: Table size\n");
+   printf(" -f f_bits: number of fingerprint bits\n");
+   printf(" -h print usage\n");
+   /*printf(" -a as_ratio: set the A/S ratio \n");
+   printf(" -S seed: select random seed (for debug)\n");
+   printf(" -L load_factor : set the ACF load factor \n");
+   printf(" -v : verbose \n");
+   printf(" -v verbose enabled\n");*/
 }
 
 
-//generate a file of random IPs
-void gen_random_ips_file(string file_name, int num_ips, vector<int64_t> exclude_list){
+//initialize
+int init(int argc, char* argv[]){
 
-  vector<string> random_ips;
-  ofstream outfile_randomlist(file_name);
+  int args_processed = 0;
 
-  //int max_jump = 10;
-  //int new_minimun = 0;
+  //program name
+  args_processed++;
 
-  for(int i = 0; i < 256; i += 1 /*+ rand()%max_jump*/){
-    for(int j = 0; j < 256; j += 1 /*+ rand()%max_jump*/){
-      for(int z = 0; z < 256; z += 1 /*+ rand()%max_jump*/){
-        for(int t = 0; t < 256; t += 1 /*+ rand()%max_jump */){
+  //read arguments
+  while(args_processed < argc){
+    
+    string option_type(argv[args_processed]);
+    args_processed++;
 
-          string new_ip = to_string(i) + ".";
-          new_ip += to_string(j) + ".";
-          new_ip += to_string(z) + ".";
-          new_ip += to_string(t);
+    if(option_type.length() == 2 && option_type.at(0) == '-'){
 
-          /*int64_t new_ip_key = ip_string_to_key(new_ip);
-          bool ip_match = false;
-          for(u_int p = new_minimun; p < exclude_list.size(); p++){
-            new_minimun = p;
-            if(new_ip_key == p){
-              ip_match = true;
-              break;
-            }else if(new_ip_key < p){
-              break;
+      char option = option_type.at(1);
+
+      switch (option){
+        case 'm':
+          if(args_processed < argc){
+            string option_value(argv[args_processed]);
+            args_processed++;
+
+            if(is_number(option_value)){
+              ht_size = stoi(option_value);
+            }else{
+              cerr << "Option -" << option << " " << option_value << " is not a number" << endl;
+              return 1;
             }
+          }else{
+            cerr << "Option -" << option << " need a value" << endl;
+            return 1;
           }
+          break;
 
-          ////////////////////////////////////////////////////////////////////corregir
+        case 'f':
+          if(args_processed < argc){
+            string option_value(argv[args_processed]);
+            args_processed++;
 
-          if(!ip_match){
-            outfile_randomlist << new_ip << endl;
-            random_ips.push_back(new_ip_key);
-
-            if((int)random_ips.size() % 100 == 0) cout << "Van " << (int)random_ips.size() << endl;
-
-            if((int)random_ips.size() == num_ips){
-              i = 256;
-              j = 256;
-              z = 256;
-              break;
+            if(is_number(option_value)){
+              f = stoi(option_value);
+            }else{
+              cerr << "Option -" << option << " " << option_value << " is not a number" << endl;
+              return 1;
             }
-          }*/
+          }else{
+            cerr << "Option -" << option << " need a value" << endl;
+            return 1;
+          }
+          break;
 
-          //if( find(exclude_list.begin(), exclude_list.end(), new_ip) == exclude_list.end() ){
-            outfile_randomlist << new_ip << endl;
-            random_ips.push_back(new_ip);
+        case 'b':
+          if(args_processed < argc){
+            string option_value(argv[args_processed]);
+            args_processed++;
 
-            if((int)random_ips.size() % 10000 == 0) cout << "Van " << (int)random_ips.size() << endl;
-
-            if((int)random_ips.size() == num_ips){
-              i = 256;
-              j = 256;
-              z = 256;
-              break;
+            if(option_value.length() > 0){
+              file_blacklist = option_value;
             }
-          //}
+            
+          }else{
+            cerr << "Option -" << option << " need a value" << endl;
+            return 1;
+          }
+          break;
 
-        }
+        case 'w':
+          if(args_processed < argc){
+            string option_value(argv[args_processed]);
+            args_processed++;
+
+            if(option_value.length() > 0){
+              file_whitelist = option_value;
+            }
+            
+          }else{
+            cerr << "Option -" << option << " need a value" << endl;
+            return 1;
+          }
+          break;
+
+        /*case 'h':
+          if(is_number(option_value)){
+            f = stoi(option_value);
+          }else{
+            cerr << "Option -" << option << " " << option_value << " is not a number" << endl;
+            return 1;
+          }
+          break;*/
+      
+        default:
+          cerr << "Illegal option -" << option << endl;
+          return 1;
+          break;
       }
+      
+    }else{
+      //invalid program call
+      return 1;
     }
   }
 
-  /*for(int i = 0; i < num_ips; i++){
-    string random_ip = gen_random_ip();
+  //check mandatory arguments filled
+  if(file_blacklist.length() == 0 ||
+     file_whitelist.length() == 0){
+    cerr << "Mandatory options required" << endl;
+    return 1;
+  }
 
-    if( find(random_ips.begin(), random_ips.end(), random_ip) != random_ips.end() ||
-        find(exclude_list.begin(), exclude_list.end(), random_ip) != exclude_list.end() ){
-      
-      cout << "The value " << random_ip << " is duplicated" << endl;
-      i--;
-      continue;
-    }
-
-    outfile_randomlist << random_ip << endl;
-    random_ips.push_back(random_ip);
-  }*/
-
-  random_ips.clear();
-  outfile_randomlist.close();
+  return 0;
 }
 
 
 //program main
 int main(int argc, char **argv) {
 
-  int seed = 12342;
   srand(seed);
+
+  if(init(argc, argv) == 1){
+    //initialize errors
+    print_usage();
+    return 1;
+  }
 
   auto time_ini = std::chrono::system_clock::now();
 
-  //string file_blacklist = "blacklists/list_ip.txt";
-  string file_blacklist = "blacklists/listed_ip_180.txt";
+  //read blacklist
   ifstream infile_blacklist(file_blacklist);
 
   if(infile_blacklist.fail()){
@@ -252,23 +301,10 @@ int main(int argc, char **argv) {
 
   lines_blacklist.clear();
 
-  //////////////////check duplicates
-
   if(invalid_ips > 0){
     cerr << "The file " << file_blacklist << " contains errors" << endl;
     cerr << "Exiting..." << endl;
     return 1;
-  }
-  
-
-  bool gen_random_ips = false;
-
-  if(gen_random_ips){
-    int num_random_ips = 1000000;
-    string file_randomlist = "blacklists/randomlist_ip.txt";
-
-    gen_random_ips_file(file_randomlist, num_random_ips, ip_blacklist_keys);
-    return 0; /////////////////////////////////////////////////////
   }
 
 
@@ -289,10 +325,10 @@ int main(int argc, char **argv) {
       }
   }
 
+  map<int64_t,int> S_map;
   S_map.clear();
   int num_fails = 0;
 
-  //for(int i = 0; i < (int)(sizeof(ip_list)/sizeof(int)); i++){
   for(int64_t key : ip_blacklist_keys){
 
     //int itIP = ip_list[i];
@@ -334,62 +370,56 @@ int main(int argc, char **argv) {
   }
 
 
+  //read whitelist
+  ifstream infile_whitelist(file_whitelist);
 
-  string file_randomlist = "blacklists/randomlist_ip.txt";
-  ifstream infile_randomlist(file_randomlist);
-
-  if(infile_randomlist.fail()){
-    cerr << "Can not open file " << file_randomlist << endl;
+  if(infile_whitelist.fail()){
+    cerr << "Can not open file " << file_whitelist << endl;
     return 1;
   }
 
-  vector<string> lines_randomlist = read_lines(infile_randomlist);
-  int num_lines_randomlist = lines_randomlist.size();
+  vector<string> lines_whitelist = read_lines(infile_whitelist);
 
-  printf("Total lines good ips: %d\n", num_lines_randomlist);
+  printf("Total lines good ips: %ld\n", lines_whitelist.size());
   
-  infile_randomlist.close();
+  infile_whitelist.close();
 
-  vector<int64_t> ip_randomlist_keys;
+  vector<int64_t> ip_whitelist_keys;
   invalid_ips = 0;
 
-  for(uint i = 0; i < lines_randomlist.size(); i++){
-    if( !valid_ip(lines_randomlist[i]) ){
-      cerr << "Invalid IP format <" << lines_randomlist[i] << "> in line " << (i+1) << endl;
+  for(uint i = 0; i < lines_whitelist.size(); i++){
+    if( !valid_ip(lines_whitelist[i]) ){
+      cerr << "Invalid IP format <" << lines_whitelist[i] << "> in line " << (i+1) << endl;
       invalid_ips++;
     }else{
-      ip_randomlist_keys.push_back(ip_string_to_key(lines_randomlist[i]));
+      ip_whitelist_keys.push_back(ip_string_to_key(lines_whitelist[i]));
       //////////////////////cout << lines[i] << "\t" << ip_string_to_key(lines[i]) << endl;
     }
   }
 
   if(invalid_ips > 0){
-    cerr << "The file " << file_randomlist << " contains errors" << endl;
+    cerr << "The file " << file_whitelist << " contains errors" << endl;
     cerr << "Exiting..." << endl;
     return 1;
   }
 
   
-  int final_fp = 0; /////////////////////////////////////////////////// en vez de finalizar si hay swap block, continuar tras varios intentos
+  int final_fp = 0; //number of false positive
   
-  int total_reswaps_attempts = 0;
+  int cont_swaps = 0; //number of swaps
+  int reswap_attempts = 0; //number of reswaps (in the same key)
+  int total_reswaps_attempts = 0; //number of reswaps total
   int64_t key_last_swap = -1;
 
-  int cont_swaps = 0;
-  
-  int reswap_attempts = 0;
   const int reswap_limit = 100;
 
-  const bool allow_fp = true;
-
-  bool restart = false;
-  int cont_restart = 0;
-  const int restart_limit = 2;
+  bool restart = false; //restart remove fp indicator
+  int cont_restart = 0; //number of restarts
 
   int max_iter = 0;
 
   //Remove false positives
-  for(int iter = 0; iter < (int)ip_randomlist_keys.size(); iter++){
+  for(int iter = 0; iter < (int)ip_whitelist_keys.size(); iter++){
 
     if(iter > max_iter) max_iter = iter;
 
@@ -399,7 +429,7 @@ int main(int argc, char **argv) {
     int false_i = -1;
     int false_ii = -1;
 
-    int64_t ip_key = ip_randomlist_keys.at(iter);
+    int64_t ip_key = ip_whitelist_keys.at(iter);
     
     for (int i = 0;  i <num_way;  i++) {
       int p = hashg(ip_key, i, ht_size);
@@ -421,61 +451,73 @@ int main(int argc, char **argv) {
     //continue;
     if(false_FF){
 
-      cont_swaps++;
       restart = true;
+      bool skip_swap = false;
 
       //manage SWAP block
       if(key_last_swap == ip_key){
-        reswap_attempts++;
-        total_reswaps_attempts++;
+        
         if(reswap_attempts >= reswap_limit){
           cout << "SWAP BLOCKED by IP - " << ip_key << " with " << reswap_attempts << " attempts" << endl;
-          cout << "Exiting..." << endl;
-          break;
+          //cout << "Exiting..." << endl;
+          //skip swapping this key
+          skip_swap = true;
+          continue;
+          //break;
           //return 1;
+        }else{
+          reswap_attempts++;
+          total_reswaps_attempts++;
         }
+        
       }else{
         reswap_attempts = 0;
       }
+
       key_last_swap = ip_key;
 
-      int p = hashg(ip_key, false_i, ht_size);
+      if(!skip_swap){
+        //DO SWAP
+        cont_swaps++;
 
-      int64_t key1= cuckoo.get_key(false_i,false_ii,p);
-      int value1 = cuckoo.query(key1);
+        int p = hashg(ip_key, false_i, ht_size);
 
-      int new_ii=false_ii;
-      while (new_ii==false_ii) new_ii=rand()%num_cells;
+        int64_t key1= cuckoo.get_key(false_i,false_ii,p);
+        int value1 = cuckoo.query(key1);
 
-      int64_t key2 = cuckoo.get_key(false_i,new_ii,p);
-      int value2 = cuckoo.query(key2);
+        int new_ii=false_ii;
+        while (new_ii==false_ii) new_ii=rand()%num_cells;
 
-      //cout << "FALSE POSITIVE with IP - " << key1 << " FF[" << false_i << "][" << false_ii << "][" << p << "] = " << FF[false_i][false_ii][p] <<endl;
-      //cout << "SWAP with IP " << key2 << " FF[" << false_i << "][" << new_ii << "][" << p << "] = " << FF[false_i][new_ii][p] <<endl;
+        int64_t key2 = cuckoo.get_key(false_i,new_ii,p);
+        int value2 = cuckoo.query(key2);
 
-      if(!cuckoo.remove(key1)){
-        cerr << "PANIC! Error during SWAP" << endl;
+        //cout << "FALSE POSITIVE with IP - " << key1 << " FF[" << false_i << "][" << false_ii << "][" << p << "] = " << FF[false_i][false_ii][p] <<endl;
+        //cout << "SWAP with IP " << key2 << " FF[" << false_i << "][" << new_ii << "][" << p << "] = " << FF[false_i][new_ii][p] <<endl;
+
+        if(!cuckoo.remove(key1)){
+          cerr << "PANIC! Error during SWAP" << endl;
+        }
+
+        if(!cuckoo.remove(key2)){ // the position of new_ii was free
+          FF[false_i][false_ii][p]=-1;
+        }else{
+          cuckoo.direct_insert(key2, value2, false_i, false_ii);
+          FF[false_i][false_ii][p] = fingerprint(key2, false_ii, f);
+        }
+
+        cuckoo.direct_insert(key1, value1, false_i, new_ii);
+        FF[false_i][new_ii][p] = fingerprint(key1,new_ii,f);
+        
+        //cout << "NEW VALUES with IP - " << key1 << " FF[" << false_i << "][" << new_ii << "][" << p << "] = " << FF[false_i][new_ii][p] <<endl;
+        //cout << "NEW VALUES with IP - " << key2 << " FF[" << false_i << "][" << false_ii << "][" << p << "] = " << FF[false_i][false_ii][p] <<endl;
+
+        //check again this iteration
+        iter--;
       }
-
-      if(!cuckoo.remove(key2)){ // the position of new_ii was free
-        FF[false_i][false_ii][p]=-1;
-      }else{
-        cuckoo.direct_insert(key2, value2, false_i, false_ii);
-        FF[false_i][false_ii][p] = fingerprint(key2, false_ii, f);
-      }
-
-      cuckoo.direct_insert(key1, value1, false_i, new_ii);
-      FF[false_i][new_ii][p] = fingerprint(key1,new_ii,f);
-      
-      //cout << "NEW VALUES with IP - " << key1 << " FF[" << false_i << "][" << new_ii << "][" << p << "] = " << FF[false_i][new_ii][p] <<endl;
-      //cout << "NEW VALUES with IP - " << key2 << " FF[" << false_i << "][" << false_ii << "][" << p << "] = " << FF[false_i][false_ii][p] <<endl;
-
-      //check again this iteration
-      iter--;
     }
 
     //restart (check again all the list)
-    if(iter == (int)ip_randomlist_keys.size() -1 && restart){
+    if(iter == (int)ip_whitelist_keys.size() -1 && restart){
       if(allow_fp){
         /////////////////////////////////////////////////juntar en un if?
         //check for restart limit
@@ -504,9 +546,9 @@ int main(int argc, char **argv) {
 
   //Verify again all the IPs
   cout << "Starting final verification..." << endl;
-  for(int iter = 0; iter < (int)ip_randomlist_keys.size(); iter++){
+  for(int iter = 0; iter < (int)ip_whitelist_keys.size(); iter++){
 
-    int64_t ip_key = ip_randomlist_keys.at(iter);
+    int64_t ip_key = ip_whitelist_keys.at(iter);
     
     for (int i = 0;  i <num_way;  i++) {
       int p = hashg(ip_key, i, ht_size);

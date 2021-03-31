@@ -106,15 +106,18 @@ string ip_key_to_string(int64_t key){ // required key format xxxx (x: 000-255)
 int main(int argc, char **argv){
 
   //check arguments
-  if(argc != 2){ // program name + one argument
+  if(argc != 4){ // program name + arguments
     cerr << "Invalid usage" << endl;
-    cerr << "Usage: " << argv[0] << " filename" << endl;
-    cerr << "filename is an exclude list of IPs";
+    cerr << "Usage: " << argv[0] << " <number IPs> <exclude list> <output file>" << endl;
     return 1;
   }
 
+  //read arguments
+  const string exclude_list = argv[2];
+  const string output_file = argv[3];
+  const int total_ips = stoi(argv[1]);
+
   //read exclude list file
-  string exclude_list = argv[1];
   ifstream infile_exclude_list(exclude_list);
 
   if(infile_exclude_list.fail()){
@@ -135,7 +138,6 @@ int main(int argc, char **argv){
       invalid_ips++;
     }else{
       ip_exclude_list_keys.push_back(ip_string_to_key(lines_exclude_list[i]));
-      //////////////////////cout << lines[i] << "\t" << ip_string_to_key(lines[i]) << endl;
     }
   }
 
@@ -147,11 +149,9 @@ int main(int argc, char **argv){
     return 1;
   }
 
-  const int total_ips = 1000000;
-  int max_jump = (global_ips / total_ips) * (2 * 0.9);
-
-  string file_name = "aaa.txt";
-  ofstream outfile(file_name);
+  //generate random IP list
+  const int max_jump = (global_ips / total_ips) * (2 * 0.9);
+  ofstream outfile(output_file);
 
   int seed = 12342;
   srand(seed);
@@ -210,7 +210,10 @@ int main(int argc, char **argv){
 
   outfile.close();
 
-  ////////////////////////////////////////////////////// no hace el maximo
+  if(cont_ips < total_ips){
+    cerr << "Only " << cont_ips << "/" << total_ips << " IPs generated." << endl;
+    return 1;
+  }
 
   return 0;
 }
