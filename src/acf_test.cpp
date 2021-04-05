@@ -19,14 +19,18 @@ const int num_cells=4;  //# of slots in a rows
 
 int ht_size=40000; //# of rows
 int f=10; //# of fingerprint bits
+const int seed = 12342; //random seed
 
-const bool allow_fp = true; //allow false positives
-const int restart_limit = 2; //max restart value
+bool allow_fp = true; //allow false positives
+int restart_limit = 20; //max restart value
 
 string file_blacklist;
 string file_whitelist;
 
-int seed = 12342; //random seed
+//progress bar data
+bool verbose_out = false; //verbose
+const int prog_bar_size = 50;
+string prog_bar;
 
 
 //generate a fingerprint
@@ -128,24 +132,26 @@ string ip_key_to_string(int64_t key){ // required key format xxxx (x: 000-255)
 
 //program usage
 void print_usage() {
-   printf("Usage:\n");
-   printf(" *** MANDATORY ***\n");
-   printf(" -b blacklist: input blacklist file\n");
-   printf(" -w whitelist: input whitelist file\n");
-   printf(" *** OPTIONAL ***\n");
-   printf(" -m tsize: Table size\n");
-   printf(" -f f_bits: number of fingerprint bits\n");
-   printf(" -h print usage\n");
-   /*printf(" -a as_ratio: set the A/S ratio \n");
-   printf(" -S seed: select random seed (for debug)\n");
-   printf(" -L load_factor : set the ACF load factor \n");
-   printf(" -v : verbose \n");
-   printf(" -v verbose enabled\n");*/
+  printf("\nUsage:\n");
+  printf(" *** MANDATORY ***\n");
+  printf(" -b blacklist: input blacklist file\n");
+  printf(" -w whitelist: input whitelist file\n");
+  printf(" *** OPTIONAL ***\n");
+  printf(" -m tsize: Table size (default: %d)\n", ht_size);
+  printf(" -f f_bits: number of fingerprint bits (default: %d)\n", f);
+  printf(" -r restart_limit: reduce false positive max restarts (default: %d)\n", restart_limit);
+  //printf(" -s seed: random seed value (default: %d)\n", seed);
+  printf(" -v : verbose \n");
+  printf(" -h : print usage \n");
 }
 
 
 //initialize
 int init(int argc, char* argv[]){
+
+  print_hostname();
+  print_command_line(argc,argv); //print the command line with the option
+  cout << endl;
 
   int args_processed = 0;
 
@@ -163,6 +169,37 @@ int init(int argc, char* argv[]){
       char option = option_type.at(1);
 
       switch (option){
+
+        case 'b':
+          if(args_processed < argc){
+            string option_value(argv[args_processed]);
+            args_processed++;
+
+            if(option_value.length() > 0){
+              file_blacklist = option_value;
+            }
+            
+          }else{
+            cerr << "Option -" << option << " need a value" << endl;
+            return 1;
+          }
+          break;
+
+        case 'w':
+          if(args_processed < argc){
+            string option_value(argv[args_processed]);
+            args_processed++;
+
+            if(option_value.length() > 0){
+              file_whitelist = option_value;
+            }
+            
+          }else{
+            cerr << "Option -" << option << " need a value" << endl;
+            return 1;
+          }
+          break;
+
         case 'm':
           if(args_processed < argc){
             string option_value(argv[args_processed]);
@@ -197,44 +234,47 @@ int init(int argc, char* argv[]){
           }
           break;
 
-        case 'b':
+        case 'r':
           if(args_processed < argc){
             string option_value(argv[args_processed]);
             args_processed++;
 
-            if(option_value.length() > 0){
-              file_blacklist = option_value;
+            if(is_number(option_value)){
+              restart_limit = stoi(option_value);
+            }else{
+              cerr << "Option -" << option << " " << option_value << " is not a number" << endl;
+              return 1;
             }
-            
           }else{
             cerr << "Option -" << option << " need a value" << endl;
             return 1;
           }
           break;
 
-        case 'w':
+        /*case 's':
           if(args_processed < argc){
             string option_value(argv[args_processed]);
             args_processed++;
 
-            if(option_value.length() > 0){
-              file_whitelist = option_value;
+            if(is_number(option_value)){
+              seed = stoi(option_value);
+            }else{
+              cerr << "Option -" << option << " " << option_value << " is not a number" << endl;
+              return 1;
             }
-            
           }else{
             cerr << "Option -" << option << " need a value" << endl;
-            return 1;
-          }
-          break;
-
-        /*case 'h':
-          if(is_number(option_value)){
-            f = stoi(option_value);
-          }else{
-            cerr << "Option -" << option << " " << option_value << " is not a number" << endl;
             return 1;
           }
           break;*/
+
+        case 'v':
+          verbose_out = true;
+          break;
+
+        case 'h':
+          return 1;
+          break;
       
         default:
           cerr << "Illegal option -" << option << endl;
@@ -259,6 +299,66 @@ int init(int argc, char* argv[]){
 }
 
 
+//print progress bar
+void print_progress(int current, int total){
+  if(current == 0){ //init progress bar
+    prog_bar = string (prog_bar_size, ' ');
+    cerr << "[" << prog_bar << "] " << "0%" << "\r";
+  }else if(current == total-1){ //last one
+    cerr << "[" << prog_bar << "] " << "100%" << "\n";
+  }else if(current % (total / 100) == 0){
+    int percent = current * 100 / total;
+    prog_bar[current * prog_bar_size / total] = '=';
+    cerr << "[" << prog_bar << "] " << percent << "%" << "\r";
+  }
+}
+
+
+//fill IP key vector from IP list file
+vector<int64_t> file_to_ip(string filename){
+
+  vector<int64_t> ip_keys;
+
+  ifstream infile(filename);
+
+  if(infile.fail()){
+    cerr << "Can not open file " << filename << endl;
+    ip_keys.clear();
+    return ip_keys;
+  }
+
+  vector<string> file_lines = read_lines(infile);
+  infile.close();
+
+  int invalid_ips = 0;
+
+  cerr << "Reading " << filename << endl;
+
+  for(uint i = 0; i < file_lines.size(); i++){
+    
+    //progress bar
+    if(verbose_out) print_progress(i, file_lines.size());
+    
+    if( !valid_ip(file_lines[i]) ){
+      cerr << endl << "Invalid IP format <" << file_lines[i] << "> in line " << (i+1) << endl;
+      invalid_ips++;
+    }else{
+      ip_keys.push_back(ip_string_to_key(file_lines[i]));
+    }
+  }
+
+  file_lines.clear();
+
+  if(invalid_ips > 0){
+    cerr << "The file " << filename << " contains errors" << endl;
+    ip_keys.clear();
+    return ip_keys;
+  }
+
+  return ip_keys;
+}
+
+
 //program main
 int main(int argc, char **argv) {
 
@@ -273,39 +373,36 @@ int main(int argc, char **argv) {
   auto time_ini = std::chrono::system_clock::now();
 
   //read blacklist
-  ifstream infile_blacklist(file_blacklist);
+  vector<int64_t> ip_blacklist_keys = file_to_ip(file_blacklist);
 
-  if(infile_blacklist.fail()){
-    cerr << "Can not open file " << file_blacklist << endl;
-    return 1;
-  }
-
-  vector<string> lines_blacklist = read_lines(infile_blacklist);
-
-  printf("Total lines: %ld\n", lines_blacklist.size());
-  
-  infile_blacklist.close();
-
-  vector<int64_t> ip_blacklist_keys;
-  int invalid_ips = 0;
-
-  for(uint i = 0; i < lines_blacklist.size(); i++){
-    if( !valid_ip(lines_blacklist[i]) ){
-      cerr << "Invalid IP format <" << lines_blacklist[i] << "> in line " << (i+1) << endl;
-      invalid_ips++;
-    }else{
-      ip_blacklist_keys.push_back(ip_string_to_key(lines_blacklist[i]));
-      //////////////////////cout << lines[i] << "\t" << ip_string_to_key(lines[i]) << endl;
-    }
-  }
-
-  lines_blacklist.clear();
-
-  if(invalid_ips > 0){
-    cerr << "The file " << file_blacklist << " contains errors" << endl;
+  if(ip_blacklist_keys.size() == 0){
     cerr << "Exiting..." << endl;
     return 1;
   }
+
+
+  //read whitelist
+  vector<int64_t> ip_whitelist_keys = file_to_ip(file_whitelist);
+
+  if(ip_whitelist_keys.size() == 0){
+    cerr << "Exiting..." << endl;
+    return 1;
+  }
+
+
+  //Starting AFC
+  cout << endl << "Starting the Adaptive Cuckoo Filter 2x4" << endl;
+  //Print general parameters
+  cout << "general parameters:" << endl;
+  //printf("seed: %d\n",seed);
+  cout << "way: " << num_way << endl;
+  cout << "cells: " << num_cells << endl;
+  cout << "Table size: " << ht_size << endl;
+  cout << "Fingerprint bits: " << f << endl;
+  cout << "Restart limit: " << restart_limit << endl;
+  cout << "Blacklist IPs: " << ip_blacklist_keys.size() << endl;
+  cout << "Whitelist IPs: " << ip_whitelist_keys.size() << endl;
+  cout << endl;
 
 
   //Create Cuckoo table
@@ -331,32 +428,30 @@ int main(int argc, char **argv) {
 
   for(int64_t key : ip_blacklist_keys){
 
-    //int itIP = ip_list[i];
-    int64_t itIP = key;
-
-    if( S_map.count(itIP) > 0 ){
-      printf("Value %ld already exists\n", itIP);
+    if( S_map.count(key) > 0 ){
+      cerr << "Value " << key << " already exists" << endl;
     }else{
       //printf("Added %d to list\n", itIP);
-      S_map[itIP] = 5;
+      S_map[key] = 5;
 
-      if( !cuckoo.insert(itIP,5) ){
-        printf("Table full (key: %ld)\n",itIP);
+      if( !cuckoo.insert(key,5) ){
+        cerr << "Table full (key: " << key << ")" << endl;
         num_fails++;
       }
     }
   }
 
   if(num_fails > 0){
-    printf("Exiting...");
+    cerr << "Exiting..." << endl;
     return 1;
   }
   
-  printf("Total values of the list: %ld\n", S_map.size());
 
-  printf("items= %d\n",cuckoo.get_nitem());
-  printf("load: %f \n",cuckoo.get_nitem()/(0.0+cuckoo.get_size()));
-  printf("Total size: %d\n", cuckoo.get_size());
+  cout << "Cuckoo table statistics" << endl;
+  cout << "items= " << cuckoo.get_nitem() << endl;
+  cout << "load: " << cuckoo.get_nitem()/(0.0+cuckoo.get_size()) << endl;
+  cout << "total size: " << cuckoo.get_size() << endl;
+  cout << endl;
   cuckoo.stat();
 
   for( auto x: S_map){
@@ -369,44 +464,11 @@ int main(int argc, char **argv) {
 
   }
 
-
-  //read whitelist
-  ifstream infile_whitelist(file_whitelist);
-
-  if(infile_whitelist.fail()){
-    cerr << "Can not open file " << file_whitelist << endl;
-    return 1;
-  }
-
-  vector<string> lines_whitelist = read_lines(infile_whitelist);
-
-  printf("Total lines good ips: %ld\n", lines_whitelist.size());
-  
-  infile_whitelist.close();
-
-  vector<int64_t> ip_whitelist_keys;
-  invalid_ips = 0;
-
-  for(uint i = 0; i < lines_whitelist.size(); i++){
-    if( !valid_ip(lines_whitelist[i]) ){
-      cerr << "Invalid IP format <" << lines_whitelist[i] << "> in line " << (i+1) << endl;
-      invalid_ips++;
-    }else{
-      ip_whitelist_keys.push_back(ip_string_to_key(lines_whitelist[i]));
-      //////////////////////cout << lines[i] << "\t" << ip_string_to_key(lines[i]) << endl;
-    }
-  }
-
-  if(invalid_ips > 0){
-    cerr << "The file " << file_whitelist << " contains errors" << endl;
-    cerr << "Exiting..." << endl;
-    return 1;
-  }
-
   
   int final_fp = 0; //number of false positive
   
   int cont_swaps = 0; //number of swaps
+  int total_swaps = 0; //total number of swaps
   int reswap_attempts = 0; //number of reswaps (in the same key)
   int total_reswaps_attempts = 0; //number of reswaps total
   int64_t key_last_swap = -1;
@@ -416,14 +478,19 @@ int main(int argc, char **argv) {
   bool restart = false; //restart remove fp indicator
   int cont_restart = 0; //number of restarts
 
-  int max_iter = 0;
+  ////////////////////////////////////int max_iter = 0;
+
+  cout << "Removing false positives" << endl;
 
   //Remove false positives
   for(int iter = 0; iter < (int)ip_whitelist_keys.size(); iter++){
 
-    if(iter > max_iter) max_iter = iter;
+    //progress bar
+    if(verbose_out) print_progress(iter, (int)ip_whitelist_keys.size());
 
-    if(iter%250000 == 0) cout << "Tested " << iter << " IPs" << endl;
+    ////////////////if(iter > max_iter) max_iter = iter;
+
+    ///////////////////if(iter%250000 == 0) cout << "Tested " << iter << " IPs" << endl;
 
     bool false_FF = false;
     int false_i = -1;
@@ -478,6 +545,7 @@ int main(int argc, char **argv) {
 
       if(!skip_swap){
         //DO SWAP
+        total_swaps++;
         cont_swaps++;
 
         int p = hashg(ip_key, false_i, ht_size);
@@ -523,10 +591,10 @@ int main(int argc, char **argv) {
         //check for restart limit
         if(cont_restart < restart_limit){
           //restart limit not reached
-          cout << "Total SWAPS " << cont_swaps << endl;
-          cout << "restart again" << endl; 
+          cout << "(" << cont_swaps << " new swaps)" << endl;
+          cout << "restart again" << endl;
           iter = -1;
-
+          cont_swaps = 0;
           cont_restart++;
           restart = false;
         }else{
@@ -534,9 +602,11 @@ int main(int argc, char **argv) {
         }
       }else{
         //force restart
-        cout << "Total SWAPS " << cont_swaps << endl;
+        cout << "(" << cont_swaps << " new swaps)" << endl;
         cout << "restart again" << endl; 
+        cout << endl;
         iter = -1;
+        cont_swaps = 0;
         cont_restart++;
         restart = false;
       }
@@ -547,6 +617,9 @@ int main(int argc, char **argv) {
   //Verify again all the IPs
   cout << "Starting final verification..." << endl;
   for(int iter = 0; iter < (int)ip_whitelist_keys.size(); iter++){
+
+    //progress bar
+    if(verbose_out) print_progress(iter, (int)ip_whitelist_keys.size());
 
     int64_t ip_key = ip_whitelist_keys.at(iter);
     
@@ -566,7 +639,7 @@ int main(int argc, char **argv) {
   cout << "Verification completed successfully" << endl;
 
   cout << "Total FP " << final_fp << endl; 
-  cout << "Total SWAPS " << cont_swaps << endl;
+  cout << "Total SWAPS " << total_swaps << endl;
   cout << "Total RE-SWAPS " << total_reswaps_attempts << endl;
   
 

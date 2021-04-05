@@ -10,6 +10,10 @@ using namespace std;
 const int ip_range = 256;
 const int64_t global_ips = 4294967296; //IPv4 address space
 
+//progress bar data
+const int prog_bar_size = 50;
+string prog_bar;
+
 
 //read a complete file (skip empty lines)
 vector<string> read_lines(ifstream & infile){
@@ -102,6 +106,21 @@ string ip_key_to_string(int64_t key){ // required key format xxxx (x: 000-255)
 }
 
 
+//print progress bar
+void print_progress(int current, int total){
+  if(current == 0){ //init progress bar
+    prog_bar = string (prog_bar_size, ' ');
+    cerr << "[" << prog_bar << "] " << "0%" << "\r";
+  }else if(current == total-1){ //last one
+    cerr << "[" << prog_bar << "] " << "100%" << "\n";
+  }else if(current % (total / 100) == 0){
+    int percent = current * 100 / total;
+    prog_bar[current * prog_bar_size / total] = '=';
+    cerr << "[" << prog_bar << "] " << percent << "%" << "\r";
+  }
+}
+
+
 //program main
 int main(int argc, char **argv){
 
@@ -161,6 +180,8 @@ int main(int argc, char **argv){
   int cont_ips = 0;
 
   while(cont_ips < total_ips){
+
+    print_progress(cont_ips, total_ips);
 
     //generate ip
     int increment = 1 + (rand() % max_jump);
