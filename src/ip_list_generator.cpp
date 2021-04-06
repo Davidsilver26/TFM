@@ -3,6 +3,7 @@
 #include <string.h>
 #include <fstream>
 #include <vector>
+#include "utils.h"
 
 
 using namespace std;
@@ -124,10 +125,13 @@ void print_progress(int current, int total){
 //program main
 int main(int argc, char **argv){
 
+  print_hostname();
+  print_command_line(argc,argv); //print the command line with the option
+
   //check arguments
   if(argc != 4){ // program name + arguments
-    cerr << "Invalid usage" << endl;
-    cerr << "Usage: " << argv[0] << " <number IPs> <exclude list> <output file>" << endl;
+    cout << "Invalid usage" << endl;
+    cout << "Usage: " << argv[0] << " <number IPs> <exclude list> <output file>" << endl;
     return 1;
   }
 
@@ -140,7 +144,7 @@ int main(int argc, char **argv){
   ifstream infile_exclude_list(exclude_list);
 
   if(infile_exclude_list.fail()){
-    cerr << "Can not open file " << exclude_list << endl;
+    cout << "Can not open file " << exclude_list << endl;
     return 1;
   }
 
@@ -153,7 +157,7 @@ int main(int argc, char **argv){
 
   for(uint i = 0; i < lines_exclude_list.size(); i++){
     if( !valid_ip(lines_exclude_list[i]) ){
-      cerr << "Invalid IP format <" << lines_exclude_list[i] << "> in line " << (i+1) << endl;
+      cout << "Invalid IP format <" << lines_exclude_list[i] << "> in line " << (i+1) << endl;
       invalid_ips++;
     }else{
       ip_exclude_list_keys.push_back(ip_string_to_key(lines_exclude_list[i]));
@@ -163,8 +167,8 @@ int main(int argc, char **argv){
   lines_exclude_list.clear();
 
   if(invalid_ips > 0){
-    cerr << "The file " << exclude_list << " contains errors" << endl;
-    cerr << "Exiting..." << endl;
+    cout << "The file " << exclude_list << " contains errors" << endl;
+    cout << "Exiting..." << endl;
     return 1;
   }
 
@@ -220,7 +224,6 @@ int main(int argc, char **argv){
       exclude_ip_key = ip_exclude_list_keys.at(exclude_iter);
     }
 
-    //cout << "compare " << new_ip << " == " << ip_key_to_string(exclude_ip_key) << endl;
     if(new_ip_key != exclude_ip_key){
       //add IP
       outfile << new_ip << endl;
@@ -232,7 +235,7 @@ int main(int argc, char **argv){
   outfile.close();
 
   if(cont_ips < total_ips){
-    cerr << "Only " << cont_ips << "/" << total_ips << " IPs generated." << endl;
+    cout << "Only " << cont_ips << "/" << total_ips << " IPs generated." << endl;
     return 1;
   }
 

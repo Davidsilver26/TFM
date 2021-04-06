@@ -18,7 +18,7 @@ const int num_way=2;      //# of ways (hash functions)
 const int num_cells=4;  //# of slots in a rows
 
 int ht_size=40000; //# of rows
-int f=10; //# of fingerprint bits
+int fingerprint_bits=10; //# of fingerprint bits
 const int seed = 12342; //random seed
 
 bool allow_fp = true; //allow false positives
@@ -60,7 +60,7 @@ vector<string> read_lines(ifstream & infile){
 
 // check if given string is a numeric string or not
 bool is_number(const string& str){
-    return !str.empty() && (str.find_first_not_of("[0123456789]") == std::string::npos);
+    return !str.empty() && (str.find_first_not_of("[0123456789]") == string::npos);
 }
 
 
@@ -132,17 +132,16 @@ string ip_key_to_string(int64_t key){ // required key format xxxx (x: 000-255)
 
 //program usage
 void print_usage() {
-  printf("\nUsage:\n");
-  printf(" *** MANDATORY ***\n");
-  printf(" -b blacklist: input blacklist file\n");
-  printf(" -w whitelist: input whitelist file\n");
-  printf(" *** OPTIONAL ***\n");
-  printf(" -m tsize: Table size (default: %d)\n", ht_size);
-  printf(" -f f_bits: number of fingerprint bits (default: %d)\n", f);
-  printf(" -r restart_limit: reduce false positive max restarts (default: %d)\n", restart_limit);
-  //printf(" -s seed: random seed value (default: %d)\n", seed);
-  printf(" -v : verbose \n");
-  printf(" -h : print usage \n");
+  cout << "\nUsage:\n";
+  cout << " *** MANDATORY ***\n";
+  cout << " -b blacklist: input blacklist file\n";
+  cout << " -w whitelist: input whitelist file\n";
+  cout << " *** OPTIONAL ***\n";
+  cout << " -m tsize: Table size (default: " << ht_size << ")\n";
+  cout << " -f f_bits: number of fingerprint bits (default: " << fingerprint_bits << ")\n";
+  cout << " -r restart_limit: reduce false positive max restarts (default: " << restart_limit << ")\n";
+  cout << " -v : verbose \n";
+  cout << " -h : print usage \n";
 }
 
 
@@ -180,7 +179,7 @@ int init(int argc, char* argv[]){
             }
             
           }else{
-            cerr << "Option -" << option << " need a value" << endl;
+            cout << "Option -" << option << " need a value" << endl;
             return 1;
           }
           break;
@@ -195,7 +194,7 @@ int init(int argc, char* argv[]){
             }
             
           }else{
-            cerr << "Option -" << option << " need a value" << endl;
+            cout << "Option -" << option << " need a value" << endl;
             return 1;
           }
           break;
@@ -208,11 +207,11 @@ int init(int argc, char* argv[]){
             if(is_number(option_value)){
               ht_size = stoi(option_value);
             }else{
-              cerr << "Option -" << option << " " << option_value << " is not a number" << endl;
+              cout << "Option -" << option << " " << option_value << " is not a number" << endl;
               return 1;
             }
           }else{
-            cerr << "Option -" << option << " need a value" << endl;
+            cout << "Option -" << option << " need a value" << endl;
             return 1;
           }
           break;
@@ -223,13 +222,13 @@ int init(int argc, char* argv[]){
             args_processed++;
 
             if(is_number(option_value)){
-              f = stoi(option_value);
+              fingerprint_bits = stoi(option_value);
             }else{
-              cerr << "Option -" << option << " " << option_value << " is not a number" << endl;
+              cout << "Option -" << option << " " << option_value << " is not a number" << endl;
               return 1;
             }
           }else{
-            cerr << "Option -" << option << " need a value" << endl;
+            cout << "Option -" << option << " need a value" << endl;
             return 1;
           }
           break;
@@ -242,31 +241,14 @@ int init(int argc, char* argv[]){
             if(is_number(option_value)){
               restart_limit = stoi(option_value);
             }else{
-              cerr << "Option -" << option << " " << option_value << " is not a number" << endl;
+              cout << "Option -" << option << " " << option_value << " is not a number" << endl;
               return 1;
             }
           }else{
-            cerr << "Option -" << option << " need a value" << endl;
+            cout << "Option -" << option << " need a value" << endl;
             return 1;
           }
           break;
-
-        /*case 's':
-          if(args_processed < argc){
-            string option_value(argv[args_processed]);
-            args_processed++;
-
-            if(is_number(option_value)){
-              seed = stoi(option_value);
-            }else{
-              cerr << "Option -" << option << " " << option_value << " is not a number" << endl;
-              return 1;
-            }
-          }else{
-            cerr << "Option -" << option << " need a value" << endl;
-            return 1;
-          }
-          break;*/
 
         case 'v':
           verbose_out = true;
@@ -277,7 +259,7 @@ int init(int argc, char* argv[]){
           break;
       
         default:
-          cerr << "Illegal option -" << option << endl;
+          cout << "Illegal option -" << option << endl;
           return 1;
           break;
       }
@@ -290,8 +272,8 @@ int init(int argc, char* argv[]){
 
   //check mandatory arguments filled
   if(file_blacklist.length() == 0 ||
-     file_whitelist.length() == 0){
-    cerr << "Mandatory options required" << endl;
+    file_whitelist.length() == 0){
+    cout << "Mandatory options required" << endl;
     return 1;
   }
 
@@ -322,7 +304,7 @@ vector<int64_t> file_to_ip(string filename){
   ifstream infile(filename);
 
   if(infile.fail()){
-    cerr << "Can not open file " << filename << endl;
+    cout << "Can not open file " << filename << endl;
     ip_keys.clear();
     return ip_keys;
   }
@@ -340,7 +322,7 @@ vector<int64_t> file_to_ip(string filename){
     if(verbose_out) print_progress(i, file_lines.size());
     
     if( !valid_ip(file_lines[i]) ){
-      cerr << endl << "Invalid IP format <" << file_lines[i] << "> in line " << (i+1) << endl;
+      cout << endl << "Invalid IP format <" << file_lines[i] << "> in line " << (i+1) << endl;
       invalid_ips++;
     }else{
       ip_keys.push_back(ip_string_to_key(file_lines[i]));
@@ -350,7 +332,7 @@ vector<int64_t> file_to_ip(string filename){
   file_lines.clear();
 
   if(invalid_ips > 0){
-    cerr << "The file " << filename << " contains errors" << endl;
+    cout << "The file " << filename << " contains errors" << endl;
     ip_keys.clear();
     return ip_keys;
   }
@@ -365,12 +347,12 @@ int main(int argc, char **argv) {
   srand(seed);
 
   if(init(argc, argv) == 1){
-    //initialize errors
+    //errors in init
     print_usage();
     return 1;
   }
 
-  auto time_ini = std::chrono::system_clock::now();
+  auto time_ini = chrono::system_clock::now();
 
   //read blacklist
   vector<int64_t> ip_blacklist_keys = file_to_ip(file_blacklist);
@@ -394,11 +376,10 @@ int main(int argc, char **argv) {
   cout << endl << "Starting the Adaptive Cuckoo Filter 2x4" << endl;
   //Print general parameters
   cout << "general parameters:" << endl;
-  //printf("seed: %d\n",seed);
   cout << "way: " << num_way << endl;
   cout << "cells: " << num_cells << endl;
   cout << "Table size: " << ht_size << endl;
-  cout << "Fingerprint bits: " << f << endl;
+  cout << "Fingerprint bits: " << fingerprint_bits << endl;
   cout << "Restart limit: " << restart_limit << endl;
   cout << "Blacklist IPs: " << ip_blacklist_keys.size() << endl;
   cout << "Whitelist IPs: " << ip_whitelist_keys.size() << endl;
@@ -429,13 +410,12 @@ int main(int argc, char **argv) {
   for(int64_t key : ip_blacklist_keys){
 
     if( S_map.count(key) > 0 ){
-      cerr << "Value " << key << " already exists" << endl;
+      cout << "Value " << key << " already exists" << endl;
     }else{
-      //printf("Added %d to list\n", itIP);
       S_map[key] = 5;
 
       if( !cuckoo.insert(key,5) ){
-        cerr << "Table full (key: " << key << ")" << endl;
+        cout << "Table full (key: " << key << ")" << endl;
         num_fails++;
       }
     }
@@ -456,11 +436,9 @@ int main(int argc, char **argv) {
 
   for( auto x: S_map){
 
-    //printf("value %ld - %d\n", x.first, x.second);
-
     //Insert in ACF
     auto res = cuckoo.fullquery(x.first);
-    FF[std::get<1>(res)][std::get<2>(res)][std::get<3>(res)]=fingerprint(x.first,std::get<2>(res),f);
+    FF[get<1>(res)][get<2>(res)][get<3>(res)]=fingerprint(x.first,get<2>(res),fingerprint_bits);
 
   }
 
@@ -471,26 +449,20 @@ int main(int argc, char **argv) {
   int total_swaps = 0; //total number of swaps
   int reswap_attempts = 0; //number of reswaps (in the same key)
   int total_reswaps_attempts = 0; //number of reswaps total
-  int64_t key_last_swap = -1;
-
   const int reswap_limit = 100;
+
+  int64_t key_last_swap = -1;
 
   bool restart = false; //restart remove fp indicator
   int cont_restart = 0; //number of restarts
 
-  ////////////////////////////////////int max_iter = 0;
-
-  cout << "Removing false positives" << endl;
+  cout << "Removing FPs" << endl;
 
   //Remove false positives
   for(int iter = 0; iter < (int)ip_whitelist_keys.size(); iter++){
 
     //progress bar
     if(verbose_out) print_progress(iter, (int)ip_whitelist_keys.size());
-
-    ////////////////if(iter > max_iter) max_iter = iter;
-
-    ///////////////////if(iter%250000 == 0) cout << "Tested " << iter << " IPs" << endl;
 
     bool false_FF = false;
     int false_i = -1;
@@ -501,9 +473,7 @@ int main(int argc, char **argv) {
     for (int i = 0;  i <num_way;  i++) {
       int p = hashg(ip_key, i, ht_size);
       for (int ii = 0;  ii <num_cells;  ii++){
-        if(fingerprint(ip_key, ii, f) == FF[i][ii][p]){
-          //cout << "FALSE POSITIVE with IP " << ip_key <<endl;
-
+        if(fingerprint(ip_key, ii, fingerprint_bits) == FF[i][ii][p]){
           false_FF = true;
           false_i = i;
           false_ii = ii;
@@ -525,13 +495,9 @@ int main(int argc, char **argv) {
       if(key_last_swap == ip_key){
         
         if(reswap_attempts >= reswap_limit){
-          cout << "SWAP BLOCKED by IP - " << ip_key << " with " << reswap_attempts << " attempts" << endl;
-          //cout << "Exiting..." << endl;
+          //cout << endl <<  "SWAP BLOCKED by IP - " << ip_key << " with " << reswap_attempts << " attempts" << endl;
           //skip swapping this key
           skip_swap = true;
-          continue;
-          //break;
-          //return 1;
         }else{
           reswap_attempts++;
           total_reswaps_attempts++;
@@ -559,63 +525,46 @@ int main(int argc, char **argv) {
         int64_t key2 = cuckoo.get_key(false_i,new_ii,p);
         int value2 = cuckoo.query(key2);
 
-        //cout << "FALSE POSITIVE with IP - " << key1 << " FF[" << false_i << "][" << false_ii << "][" << p << "] = " << FF[false_i][false_ii][p] <<endl;
-        //cout << "SWAP with IP " << key2 << " FF[" << false_i << "][" << new_ii << "][" << p << "] = " << FF[false_i][new_ii][p] <<endl;
-
         if(!cuckoo.remove(key1)){
-          cerr << "PANIC! Error during SWAP" << endl;
+          cout << endl << "PANIC! Error during SWAP" << endl;
         }
 
         if(!cuckoo.remove(key2)){ // the position of new_ii was free
           FF[false_i][false_ii][p]=-1;
         }else{
           cuckoo.direct_insert(key2, value2, false_i, false_ii);
-          FF[false_i][false_ii][p] = fingerprint(key2, false_ii, f);
+          FF[false_i][false_ii][p] = fingerprint(key2, false_ii, fingerprint_bits);
         }
 
         cuckoo.direct_insert(key1, value1, false_i, new_ii);
-        FF[false_i][new_ii][p] = fingerprint(key1,new_ii,f);
+        FF[false_i][new_ii][p] = fingerprint(key1, new_ii, fingerprint_bits);
         
-        //cout << "NEW VALUES with IP - " << key1 << " FF[" << false_i << "][" << new_ii << "][" << p << "] = " << FF[false_i][new_ii][p] <<endl;
-        //cout << "NEW VALUES with IP - " << key2 << " FF[" << false_i << "][" << false_ii << "][" << p << "] = " << FF[false_i][false_ii][p] <<endl;
-
         //check again this iteration
         iter--;
       }
     }
 
-    //restart (check again all the list)
-    if(iter == (int)ip_whitelist_keys.size() -1 && restart){
-      if(allow_fp){
-        /////////////////////////////////////////////////juntar en un if?
-        //check for restart limit
-        if(cont_restart < restart_limit){
-          //restart limit not reached
-          cout << "(" << cont_swaps << " new swaps)" << endl;
-          cout << "restart again" << endl;
+    //end of the list
+    if(iter == (int)ip_whitelist_keys.size() -1){
+      cout << "(" << cont_swaps << " new swaps)" << endl;
+
+      if(restart){ //restart (check again all the list)
+      
+        if(!allow_fp || cont_restart < restart_limit){
+          //do restart
+          cout << "Restart remove FPs (" << cont_restart+1 << "/" << restart_limit << ")" << endl;
           iter = -1;
           cont_swaps = 0;
           cont_restart++;
           restart = false;
-        }else{
-          cout << "limit reached" << endl;
         }
-      }else{
-        //force restart
-        cout << "(" << cont_swaps << " new swaps)" << endl;
-        cout << "restart again" << endl; 
-        cout << endl;
-        iter = -1;
-        cont_swaps = 0;
-        cont_restart++;
-        restart = false;
       }
     }
   }
 
 
   //Verify again all the IPs
-  cout << "Starting final verification..." << endl;
+  cout << endl << "Starting final verification..." << endl;
   for(int iter = 0; iter < (int)ip_whitelist_keys.size(); iter++){
 
     //progress bar
@@ -626,11 +575,8 @@ int main(int argc, char **argv) {
     for (int i = 0;  i <num_way;  i++) {
       int p = hashg(ip_key, i, ht_size);
       for (int ii = 0;  ii <num_cells;  ii++){
-        if(fingerprint(ip_key, ii, f) == FF[i][ii][p]){
+        if(fingerprint(ip_key, ii, fingerprint_bits) == FF[i][ii][p]){
           final_fp++;
-          /*cout << "False positive found!" << endl;
-          cout << "Exiting..." << endl;
-          return 1;*/
         }
       }
     }
@@ -638,9 +584,10 @@ int main(int argc, char **argv) {
 
   cout << "Verification completed successfully" << endl;
 
-  cout << "Total FP " << final_fp << endl; 
-  cout << "Total SWAPS " << total_swaps << endl;
-  cout << "Total RE-SWAPS " << total_reswaps_attempts << endl;
+  cout << endl << "Adaptive Cuckoo Filter statistics:" << endl;
+  cout << "Total FP: " << final_fp << endl; 
+  cout << "Total SWAPS: " << total_swaps << endl;
+  cout << "Total RE-SWAPS: " << total_reswaps_attempts << endl;
   
 
   auto time_end = chrono::system_clock::now();
