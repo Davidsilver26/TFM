@@ -2,6 +2,7 @@
 #include "utils.h"
 #include <string.h>
 #include <iostream>
+#include <sstream>
 #include <vector>
 #include <map>
 #include <time.h>
@@ -11,6 +12,7 @@
 
 #include <fstream>
 #include <chrono>
+#include <stdarg.h>
 
 using namespace std;
 
@@ -27,6 +29,11 @@ int restart_limit = 20; //max restart value
 string file_blacklist;
 string file_whitelist;
 
+//output file
+bool generate_output = false;
+string file_output;
+ofstream output;
+
 //progress bar data
 bool verbose_out = false; //verbose
 const int prog_bar_size = 50;
@@ -36,6 +43,38 @@ string prog_bar;
 //generate a fingerprint
 int fingerprint(int64_t key,int index,int f) {
     return hashg(key,20+index,1<<f);
+}
+
+
+//printf and (if required) copy to file
+void print_and_file(const char * format, ...){
+
+  va_list args;
+  va_start(args, format);
+
+  ssize_t size = vsnprintf(NULL, 0, format, args);
+  size ++; //to include '\0'
+  char output_data[size];
+
+  va_start(args, format); //reload arguments (printf clean arguments)
+  vsnprintf(output_data, size, format, args);
+
+  cout << output_data; //print in standard output
+  if(generate_output) output << output_data; //print in output file
+
+  va_end(args);
+}
+
+
+//get command line
+string get_command_line(int argc, char* argv[]) {
+  string command = "";
+	char **currentArgv = argv;
+	for (int i = 0; i < argc; i ++) {
+    command += *currentArgv;
+		currentArgv++; /* Next arg. */
+	}
+	return command + "\n";
 }
 
 
@@ -132,25 +171,24 @@ string ip_key_to_string(int64_t key){ // required key format xxxx (x: 000-255)
 
 //program usage
 void print_usage() {
-  cout << "\nUsage:\n";
-  cout << " *** MANDATORY ***\n";
-  cout << " -b blacklist: input blacklist file\n";
-  cout << " -w whitelist: input whitelist file\n";
-  cout << " *** OPTIONAL ***\n";
-  cout << " -m tsize: Table size (default: " << ht_size << ")\n";
-  cout << " -f f_bits: number of fingerprint bits (default: " << fingerprint_bits << ")\n";
-  cout << " -r restart_limit: reduce false positive max restarts (default: " << restart_limit << ")\n";
-  cout << " -v : verbose \n";
-  cout << " -h : print usage \n";
+  print_and_file("\nUsage:\n");
+  print_and_file(" *** MANDATORY ***\n");
+  print_and_file(" -b blacklist: input blacklist file\n");
+  print_and_file(" -w whitelist: input whitelist file\n");
+  print_and_file(" *** OPTIONAL ***\n");
+  print_and_file(" -m tsize: Table size (default: %d)\n", ht_size);
+  print_and_file(" -f f_bits: number of fingerprint bits (default: %d)\n", fingerprint_bits);
+  print_and_file(" -r restart_limit: reduce false positive max restarts (default: %d)\n", restart_limit);
+  print_and_file(" -o output_file: name of the output file\n");
+  print_and_file(" -v : verbose \n");
+  print_and_file(" -h : print usage \n");
 }
 
 
 //initialize
 int init(int argc, char* argv[]){
 
-  print_hostname();
-  print_command_line(argc,argv); //print the command line with the option
-  cout << endl;
+  cout << endl << get_command_line(argc, argv); //print the command line with the option
 
   int args_processed = 0;
 
@@ -179,7 +217,7 @@ int init(int argc, char* argv[]){
             }
             
           }else{
-            cout << "Option -" << option << " need a value" << endl;
+            print_and_file("Option -%c need a value\n", option);
             return 1;
           }
           break;
@@ -194,7 +232,7 @@ int init(int argc, char* argv[]){
             }
             
           }else{
-            cout << "Option -" << option << " need a value" << endl;
+            print_and_file("Option -%c need a value\n", option);
             return 1;
           }
           break;
@@ -207,11 +245,11 @@ int init(int argc, char* argv[]){
             if(is_number(option_value)){
               ht_size = stoi(option_value);
             }else{
-              cout << "Option -" << option << " " << option_value << " is not a number" << endl;
+              print_and_file("Option -%c %s is not a number\n", option, option_value.c_str());
               return 1;
             }
           }else{
-            cout << "Option -" << option << " need a value" << endl;
+            print_and_file("Option -%c need a value\n", option);
             return 1;
           }
           break;
@@ -224,11 +262,11 @@ int init(int argc, char* argv[]){
             if(is_number(option_value)){
               fingerprint_bits = stoi(option_value);
             }else{
-              cout << "Option -" << option << " " << option_value << " is not a number" << endl;
+              print_and_file("Option -%c %s is not a number\n", option, option_value.c_str());
               return 1;
             }
           }else{
-            cout << "Option -" << option << " need a value" << endl;
+            print_and_file("Option -%c need a value\n", option);
             return 1;
           }
           break;
@@ -241,11 +279,30 @@ int init(int argc, char* argv[]){
             if(is_number(option_value)){
               restart_limit = stoi(option_value);
             }else{
-              cout << "Option -" << option << " " << option_value << " is not a number" << endl;
+              print_and_file("Option -%c %s is not a number\n", option, option_value.c_str());
               return 1;
             }
           }else{
-            cout << "Option -" << option << " need a value" << endl;
+            print_and_file("Option -%c need a value\n", option);
+            return 1;
+          }
+          break;
+
+        case 'o':
+          if(args_processed < argc){
+            string option_value(argv[args_processed]);
+            args_processed++;
+
+            if(option_value.length() > 0){
+              file_output = option_value;
+              generate_output = true;
+              //create output file
+              output = ofstream (file_output);
+              output << get_command_line(argc, argv);
+            }
+            
+          }else{
+            print_and_file("Option -%c need a value\n", option);
             return 1;
           }
           break;
@@ -259,7 +316,7 @@ int init(int argc, char* argv[]){
           break;
       
         default:
-          cout << "Illegal option -" << option << endl;
+          print_and_file("Illegal option -%c\n", option);
           return 1;
           break;
       }
@@ -273,7 +330,7 @@ int init(int argc, char* argv[]){
   //check mandatory arguments filled
   if(file_blacklist.length() == 0 ||
     file_whitelist.length() == 0){
-    cout << "Mandatory options required" << endl;
+    print_and_file("Mandatory options required\n");
     return 1;
   }
 
@@ -304,7 +361,7 @@ vector<int64_t> file_to_ip(string filename){
   ifstream infile(filename);
 
   if(infile.fail()){
-    cout << "Can not open file " << filename << endl;
+    print_and_file("Can not open file %s\n", filename.c_str());
     ip_keys.clear();
     return ip_keys;
   }
@@ -314,7 +371,7 @@ vector<int64_t> file_to_ip(string filename){
 
   int invalid_ips = 0;
 
-  cerr << "Reading " << filename << endl;
+  print_and_file("Reading %s\n", filename.c_str());
 
   for(uint i = 0; i < file_lines.size(); i++){
     
@@ -322,7 +379,7 @@ vector<int64_t> file_to_ip(string filename){
     if(verbose_out) print_progress(i, file_lines.size());
     
     if( !valid_ip(file_lines[i]) ){
-      cout << endl << "Invalid IP format <" << file_lines[i] << "> in line " << (i+1) << endl;
+      print_and_file("\nInvalid IP format <%s> in line %d\n", file_lines[i].c_str(), (i+1) );
       invalid_ips++;
     }else{
       ip_keys.push_back(ip_string_to_key(file_lines[i]));
@@ -332,7 +389,7 @@ vector<int64_t> file_to_ip(string filename){
   file_lines.clear();
 
   if(invalid_ips > 0){
-    cout << "The file " << filename << " contains errors" << endl;
+    print_and_file("The file %s contains errors\n", filename.c_str());
     ip_keys.clear();
     return ip_keys;
   }
@@ -354,11 +411,13 @@ int main(int argc, char **argv) {
 
   auto time_ini = chrono::system_clock::now();
 
+  print_and_file("\n");
+
   //read blacklist
   vector<int64_t> ip_blacklist_keys = file_to_ip(file_blacklist);
 
   if(ip_blacklist_keys.size() == 0){
-    cerr << "Exiting..." << endl;
+    print_and_file("Exiting...\n");
     return 1;
   }
 
@@ -367,23 +426,23 @@ int main(int argc, char **argv) {
   vector<int64_t> ip_whitelist_keys = file_to_ip(file_whitelist);
 
   if(ip_whitelist_keys.size() == 0){
-    cerr << "Exiting..." << endl;
+    print_and_file("Exiting...\n");
     return 1;
   }
 
 
   //Starting AFC
-  cout << endl << "Starting the Adaptive Cuckoo Filter 2x4" << endl;
+  print_and_file("\nStarting the Adaptive Cuckoo Filter 2x4\n");
   //Print general parameters
-  cout << "general parameters:" << endl;
-  cout << "way: " << num_way << endl;
-  cout << "cells: " << num_cells << endl;
-  cout << "Table size: " << ht_size << endl;
-  cout << "Fingerprint bits: " << fingerprint_bits << endl;
-  cout << "Restart limit: " << restart_limit << endl;
-  cout << "Blacklist IPs: " << ip_blacklist_keys.size() << endl;
-  cout << "Whitelist IPs: " << ip_whitelist_keys.size() << endl;
-  cout << endl;
+  print_and_file("general parameters:\n");
+  print_and_file("way: %d\n", num_way);
+  print_and_file("cells: %d\n", num_cells);
+  print_and_file("Table size: %d\n", ht_size);
+  print_and_file("Fingerprint bits: %d\n", fingerprint_bits);
+  print_and_file("Restart limit: %d\n", restart_limit);
+  print_and_file("Blacklist IPs: %ld\n", ip_blacklist_keys.size());
+  print_and_file("Whitelist IPs: %ld\n", ip_whitelist_keys.size());
+  print_and_file("\n");
 
 
   //Create Cuckoo table
@@ -392,15 +451,15 @@ int main(int argc, char **argv) {
   //Create ACF
   int*** FF= new int**[num_way];
   for (int i = 0;  i <num_way;  i++) {
-      FF[i] = new int*[num_cells];
-      for (int ii = 0;  ii <num_cells;  ii++){
-          FF[i][ii]= new int[ht_size];
+    FF[i] = new int*[num_cells];
+    for (int ii = 0;  ii <num_cells;  ii++){
+      FF[i][ii]= new int[ht_size];
 
-          //Clean ACF
-          for (int iii = 0; iii <ht_size; iii++){
-            FF[i][ii][iii] = -1;
-          }
+      //Clean ACF
+      for (int iii = 0; iii <ht_size; iii++){
+        FF[i][ii][iii] = -1;
       }
+    }
   }
 
   map<int64_t,int> S_map;
@@ -410,28 +469,28 @@ int main(int argc, char **argv) {
   for(int64_t key : ip_blacklist_keys){
 
     if( S_map.count(key) > 0 ){
-      cout << "Value " << key << " already exists" << endl;
+      print_and_file("Value %ld already exists\n", key);
     }else{
       S_map[key] = 5;
 
       if( !cuckoo.insert(key,5) ){
-        cout << "Table full (key: " << key << ")" << endl;
+        print_and_file("Table full (key: %ld)\n", key);
         num_fails++;
       }
     }
   }
 
   if(num_fails > 0){
-    cerr << "Exiting..." << endl;
+    print_and_file("Exiting...\n");
     return 1;
   }
   
 
-  cout << "Cuckoo table statistics" << endl;
-  cout << "items= " << cuckoo.get_nitem() << endl;
-  cout << "load: " << cuckoo.get_nitem()/(0.0+cuckoo.get_size()) << endl;
-  cout << "total size: " << cuckoo.get_size() << endl;
-  cout << endl;
+  print_and_file("Cuckoo table statistics\n");
+  print_and_file("items: %d\n", cuckoo.get_nitem());
+  print_and_file("load: %f\n", cuckoo.get_nitem()/(0.0+cuckoo.get_size()) );
+  print_and_file("total size: %d\n", cuckoo.get_size());
+  print_and_file("\n");
   cuckoo.stat();
 
   for( auto x: S_map){
@@ -456,7 +515,7 @@ int main(int argc, char **argv) {
   bool restart = false; //restart remove fp indicator
   int cont_restart = 0; //number of restarts
 
-  cout << "Removing FPs" << endl;
+  print_and_file("Removing FPs\n");
 
   //Remove false positives
   for(int iter = 0; iter < (int)ip_whitelist_keys.size(); iter++){
@@ -495,7 +554,7 @@ int main(int argc, char **argv) {
       if(key_last_swap == ip_key){
         
         if(reswap_attempts >= reswap_limit){
-          //cout << endl <<  "SWAP BLOCKED by IP - " << ip_key << " with " << reswap_attempts << " attempts" << endl;
+          //print_and_file("\nSWAP BLOCKED by IP - %ld with %d attempts\n", ip_key, reswap_attempts);
           //skip swapping this key
           skip_swap = true;
         }else{
@@ -526,7 +585,7 @@ int main(int argc, char **argv) {
         int value2 = cuckoo.query(key2);
 
         if(!cuckoo.remove(key1)){
-          cout << endl << "PANIC! Error during SWAP" << endl;
+          print_and_file("\nPANIC! Error during SWAP\n");
         }
 
         if(!cuckoo.remove(key2)){ // the position of new_ii was free
@@ -546,13 +605,13 @@ int main(int argc, char **argv) {
 
     //end of the list
     if(iter == (int)ip_whitelist_keys.size() -1){
-      cout << "(" << cont_swaps << " new swaps)" << endl;
+      print_and_file("(%d new swaps)\n", cont_swaps);
 
       if(restart){ //restart (check again all the list)
       
         if(!allow_fp || cont_restart < restart_limit){
           //do restart
-          cout << "Restart remove FPs (" << cont_restart+1 << "/" << restart_limit << ")" << endl;
+          print_and_file("Restart remove FPs (%d/%d)\n", cont_restart+1, restart_limit);
           iter = -1;
           cont_swaps = 0;
           cont_restart++;
@@ -564,7 +623,7 @@ int main(int argc, char **argv) {
 
 
   //Verify again all the IPs
-  cout << endl << "Starting final verification..." << endl;
+  print_and_file("\nStarting final verification...\n");
   for(int iter = 0; iter < (int)ip_whitelist_keys.size(); iter++){
 
     //progress bar
@@ -582,17 +641,20 @@ int main(int argc, char **argv) {
     }
   }
 
-  cout << "Verification completed successfully" << endl;
+  print_and_file("Verification completed successfully\n");
 
-  cout << endl << "Adaptive Cuckoo Filter statistics:" << endl;
-  cout << "Total FP: " << final_fp << endl; 
-  cout << "Total SWAPS: " << total_swaps << endl;
-  cout << "Total RE-SWAPS: " << total_reswaps_attempts << endl;
+  print_and_file("\nAdaptive Cuckoo Filter statistics:\n");
+  print_and_file("Total FP: %d\n", final_fp);
+  print_and_file("Total SWAPS: %d\n", total_swaps);
+  print_and_file("Total RE-SWAPS: %d\n", total_reswaps_attempts);
   
 
   auto time_end = chrono::system_clock::now();
   auto execution_seconds = chrono::duration_cast<chrono::seconds>(time_end-time_ini).count();
-  cout << "Execution time: " << execution_seconds << " seconds" << endl;
+  print_and_file("Execution time: %ld seconds\n", execution_seconds);
+
+  //fini
+  output.close();
 
   return 0;
 }

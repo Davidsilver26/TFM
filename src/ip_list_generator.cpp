@@ -125,7 +125,6 @@ void print_progress(int current, int total){
 //program main
 int main(int argc, char **argv){
 
-  print_hostname();
   print_command_line(argc,argv); //print the command line with the option
 
   //check arguments
