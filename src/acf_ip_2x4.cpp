@@ -5,10 +5,6 @@
 #include <sstream>
 #include <vector>
 #include <map>
-#include <time.h>
-#include <limits.h>
-#include <random>
-#include <algorithm>
 
 #include <fstream>
 #include <chrono>
@@ -403,7 +399,7 @@ int main(int argc, char **argv) {
 
   srand(seed);
 
-  if(init(argc, argv) == 1){
+  if(init(argc, argv) != 0){
     //errors in init
     print_usage();
     return 1;
@@ -438,6 +434,7 @@ int main(int argc, char **argv) {
   print_and_file("way: %d\n", num_way);
   print_and_file("cells: %d\n", num_cells);
   print_and_file("Table size: %d\n", ht_size);
+  print_and_file("Buckets: %d\n", num_way * num_cells * ht_size);
   print_and_file("Fingerprint bits: %d\n", fingerprint_bits);
   print_and_file("Restart limit: %d\n", restart_limit);
   print_and_file("Blacklist IPs: %ld\n", ip_blacklist_keys.size());
@@ -447,6 +444,7 @@ int main(int argc, char **argv) {
 
   //Create Cuckoo table
   HTmap<int64_t,int> cuckoo(num_way,num_cells,ht_size,1000);
+  cuckoo.clear();
 
   //Create ACF
   int*** FF= new int**[num_way];
@@ -502,8 +500,6 @@ int main(int argc, char **argv) {
   }
 
   
-  int final_fp = 0; //number of false positive
-  
   int cont_swaps = 0; //number of swaps
   int total_swaps = 0; //total number of swaps
   int reswap_attempts = 0; //number of reswaps (in the same key)
@@ -544,7 +540,6 @@ int main(int argc, char **argv) {
     }
 
     //SWAP
-    //continue;
     if(false_FF){
 
       restart = true;
@@ -575,7 +570,7 @@ int main(int argc, char **argv) {
 
         int p = hashg(ip_key, false_i, ht_size);
 
-        int64_t key1= cuckoo.get_key(false_i,false_ii,p);
+        int64_t key1 = cuckoo.get_key(false_i,false_ii,p);
         int value1 = cuckoo.query(key1);
 
         int new_ii=false_ii;
@@ -589,7 +584,7 @@ int main(int argc, char **argv) {
         }
 
         if(!cuckoo.remove(key2)){ // the position of new_ii was free
-          FF[false_i][false_ii][p]=-1;
+          FF[false_i][false_ii][p] = -1;
         }else{
           cuckoo.direct_insert(key2, value2, false_i, false_ii);
           FF[false_i][false_ii][p] = fingerprint(key2, false_ii, fingerprint_bits);
@@ -624,6 +619,8 @@ int main(int argc, char **argv) {
 
   //Verify again all the IPs
   print_and_file("\nStarting final verification...\n");
+  int final_fp = 0; //number of false positive
+
   for(int iter = 0; iter < (int)ip_whitelist_keys.size(); iter++){
 
     //progress bar
@@ -631,9 +628,9 @@ int main(int argc, char **argv) {
 
     int64_t ip_key = ip_whitelist_keys.at(iter);
     
-    for (int i = 0;  i <num_way;  i++) {
+    for (int i = 0;  i < num_way;  i++) {
       int p = hashg(ip_key, i, ht_size);
-      for (int ii = 0;  ii <num_cells;  ii++){
+      for (int ii = 0;  ii < num_cells;  ii++){
         if(fingerprint(ip_key, ii, fingerprint_bits) == FF[i][ii][p]){
           final_fp++;
         }
@@ -654,7 +651,7 @@ int main(int argc, char **argv) {
   print_and_file("Execution time: %ld seconds\n", execution_seconds);
 
   //fini
-  output.close();
+  if(generate_output) output.close();
 
   return 0;
 }
