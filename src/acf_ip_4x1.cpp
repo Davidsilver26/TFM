@@ -9,18 +9,21 @@
 #include <fstream>
 #include <chrono>
 #include <stdarg.h>
+#include <cmath>
 
 using namespace std;
 
-int num_way = 4;   //# of ways (hash functions)
-int num_cells = 1; //# of slots in a rows
+const int num_way = 4;                   //# of ways (hash functions)
+const int num_cells = 1;                 //# of slots in a rows
+const int default_ht_size = 80000;       //# of rows
+const int default_fingerprint_bits = 10; //# of fingerprint bits
+const int default_selection_bits = 1;    //# of selection bits
 
-int ht_size = 80000;                               //# of rows
-int fingerprint_bits = 10;                         //# of fingerprint bits
-int selection_bits = 1;                            //# of selection bits
+int ht_size = default_ht_size;                     //# of rows
+int load_factor = 0;                               //load factor (by default table size base on ht_size)
+int fingerprint_bits = default_fingerprint_bits;   //# of fingerprint bits
+int selection_bits = default_selection_bits;       //# of selection bits
 int hash_bits = fingerprint_bits - selection_bits; //# of hash function bits
-int skewed = 0;
-//int seed = 12342;                  //random seed
 
 string file_blacklist;
 string file_whitelist;
@@ -38,17 +41,7 @@ string prog_bar;
 //select the fingerprint function
 int fingerprint(int64_t key, int index, int a)
 {
-  int s = selection_bits;
-  int r = skewed;
-  int range = (1 << (a - r + s)) * ((1 << r) - 1);
-  int range2 = 1 << (a - r);
-  if (index > 0)
-    range = range2;
-
-  if (r == 0)
-    return hashg(key, 20 + index, 1 << a);
-  else
-    return hashg(key, 20 + index, range);
+  return hashg(key, 20 + index, 1 << a);
 }
 
 //printf and (if required) copy to file
@@ -80,6 +73,7 @@ string get_command_line(int argc, char *argv[])
   for (int i = 0; i < argc; i++)
   {
     command += *currentArgv;
+    command += " ";
     currentArgv++; /* Next arg. */
   }
   return command + "\n";
@@ -267,10 +261,10 @@ void print_usage()
   print_and_file(" -b blacklist: input blacklist file\n");
   print_and_file(" -w whitelist: input whitelist file\n");
   print_and_file(" *** OPTIONAL ***\n");
-  print_and_file(" -m tsize: Table size (default: %d)\n", ht_size);
-  print_and_file(" -f f_bits: number of fingerprint bits (default: %d)\n", fingerprint_bits);
-  print_and_file(" -s s_bits: number of selection bits (default %d)\n", selection_bits);
-  print_and_file(" -k skewness: skewness factor\n"); /////////////////////////////////////////////////////////////////// user? añadir init
+  print_and_file(" -m tsize: Table size (default: %d)\n", default_ht_size);
+  print_and_file(" -l load_factor: ACF load factor in %\n");
+  print_and_file(" -f f_bits: number of fingerprint bits (default: %d)\n", default_fingerprint_bits);
+  print_and_file(" -s s_bits: number of selection bits (default %d)\n", default_selection_bits);
   print_and_file(" -o output_file: name of the output file\n");
   print_and_file(" -v : verbose \n");
   print_and_file(" -h : print usage \n");
@@ -348,6 +342,29 @@ int init(int argc, char *argv[])
           if (is_number(option_value))
           {
             ht_size = stoi(option_value);
+          }
+          else
+          {
+            print_and_file("Option -%c %s is not a number\n", option, option_value.c_str());
+            return 1;
+          }
+        }
+        else
+        {
+          print_and_file("Option -%c need a value\n", option);
+          return 1;
+        }
+        break;
+
+      case 'l':
+        if (args_processed < argc)
+        {
+          string option_value(argv[args_processed]);
+          args_processed++;
+
+          if (is_number(option_value))
+          {
+            load_factor = stoi(option_value);
           }
           else
           {
@@ -500,6 +517,13 @@ int main(int argc, char **argv)
     return 1;
   }
 
+  //recalculate ACF table size if load factor is used
+  if (load_factor > 0)
+  {
+    int expected_buckets = ceil((double)ip_blacklist_keys.size() / ((double)load_factor / 100));
+    ht_size = ceil((double)expected_buckets / (double)(num_way * num_cells));
+  }
+
   //Starting AFC
   print_and_file("\nStarting the Adaptive Cuckoo Filter 2x4\n");
   //Print general parameters
@@ -508,7 +532,7 @@ int main(int argc, char **argv)
   print_and_file("cells: %d\n", num_cells);
   print_and_file("Table size: %d\n", ht_size);
   print_and_file("Buckets: %d\n", num_way * num_cells * ht_size);
-  print_and_file("Fingerprint bits: %d\n", fingerprint_bits); ///////////////////////////////////////
+  print_and_file("Fingerprint bits: %d\n", fingerprint_bits);
   print_and_file("Hash function bits: %d\n", hash_bits);
   print_and_file("Selection bits: %d\n", selection_bits);
   print_and_file("Blacklist IPs: %ld\n", ip_blacklist_keys.size());
@@ -580,7 +604,6 @@ int main(int argc, char **argv)
   int total_swaps = 0;                        //total number of swaps
   int amount_functions = 1 << selection_bits; //total number of hash functions with the selection bits
 
-  //////////////////////////////////////////////////////////////iterations
   //Remove false positives
   for (int hash_func_number = 0; hash_func_number < amount_functions; hash_func_number++)
   {
@@ -602,7 +625,7 @@ int main(int argc, char **argv)
 
       for (int i = 0; i < num_way; i++)
       {
-        int p = myhash<int64_t>(ip_key, i, ht_size);
+        int p = hashg(ip_key, i, ht_size);
         int ii = FF[i][p].first;
         if (fingerprint(ip_key, ii, hash_bits) == FF[i][p].second)
         {
@@ -618,17 +641,10 @@ int main(int argc, char **argv)
         total_swaps++;
         cont_swaps++;
 
-        int p = myhash<int64_t>(ip_key, false_i, ht_size);
+        int p = hashg(ip_key, false_i, ht_size);
         int64_t key1 = cuckoo.get_key(false_i, 0, p);
 
-        if (skewed > 0)
-        {
-          FF[false_i][p].first = (FF[false_i][p].first + 1) % ((1 << selection_bits) + 1);
-        }
-        else
-        {
-          FF[false_i][p].first = (FF[false_i][p].first + 1) % (1 << selection_bits);
-        }
+        FF[false_i][p].first = (FF[false_i][p].first + 1) % (1 << selection_bits);
 
         FF[false_i][p].second = fingerprint(key1, FF[false_i][p].first, hash_bits);
       }
@@ -655,7 +671,7 @@ int main(int argc, char **argv)
 
     for (int i = 0; i < num_way; i++)
     {
-      int p = myhash<int64_t>(ip_key, i, ht_size);
+      int p = hashg(ip_key, i, ht_size);
       int ii = FF[i][p].first;
       if (fingerprint(ip_key, ii, hash_bits) == FF[i][p].second)
       {

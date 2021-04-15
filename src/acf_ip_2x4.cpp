@@ -9,18 +9,23 @@
 #include <fstream>
 #include <chrono>
 #include <stdarg.h>
+#include <cmath>
 
 using namespace std;
 
-const int num_way = 2;   //# of ways (hash functions)
-const int num_cells = 4; //# of slots in a rows
+const int num_way = 2;                   //# of ways (hash functions)
+const int num_cells = 4;                 //# of slots in a rows
+const int default_ht_size = 40000;       //# of rows
+const int default_fingerprint_bits = 10; //# of fingerprint bits
+const int default_restart_limit = 20;    //max restart value
 
-int ht_size = 40000;       //# of rows
-int fingerprint_bits = 10; //# of fingerprint bits
-const int seed = 12342;    //random seed
+int ht_size = default_ht_size;                   //# of rows
+int load_factor = 0;                             //load factor (by default table size base on ht_size)
+int fingerprint_bits = default_fingerprint_bits; //# of fingerprint bits
+const int seed = 12342;                          //random seed
 
-bool allow_fp = true;   //allow false positives
-int restart_limit = 20; //max restart value
+bool allow_fp = true;                      //allow false positives
+int restart_limit = default_restart_limit; //max restart value
 
 string file_blacklist;
 string file_whitelist;
@@ -70,6 +75,7 @@ string get_command_line(int argc, char *argv[])
   for (int i = 0; i < argc; i++)
   {
     command += *currentArgv;
+    command += " ";
     currentArgv++; /* Next arg. */
   }
   return command + "\n";
@@ -258,9 +264,10 @@ void print_usage()
   print_and_file(" -b blacklist: input blacklist file\n");
   print_and_file(" -w whitelist: input whitelist file\n");
   print_and_file(" *** OPTIONAL ***\n");
-  print_and_file(" -m tsize: Table size (default: %d)\n", ht_size);
-  print_and_file(" -f f_bits: number of fingerprint bits (default: %d)\n", fingerprint_bits);
-  print_and_file(" -r restart_limit: reduce false positive max restarts (default: %d)\n", restart_limit);
+  print_and_file(" -m tsize: Table size (default: %d)\n", default_ht_size);
+  print_and_file(" -l load_factor: ACF load factor in %\n");
+  print_and_file(" -f f_bits: number of fingerprint bits (default: %d)\n", default_fingerprint_bits);
+  print_and_file(" -r restart_limit: reduce false positive max restarts (default: %d)\n", default_restart_limit);
   print_and_file(" -o output_file: name of the output file\n");
   print_and_file(" -v : verbose \n");
   print_and_file(" -h : print usage \n");
@@ -338,6 +345,29 @@ int init(int argc, char *argv[])
           if (is_number(option_value))
           {
             ht_size = stoi(option_value);
+          }
+          else
+          {
+            print_and_file("Option -%c %s is not a number\n", option, option_value.c_str());
+            return 1;
+          }
+        }
+        else
+        {
+          print_and_file("Option -%c need a value\n", option);
+          return 1;
+        }
+        break;
+
+      case 'l':
+        if (args_processed < argc)
+        {
+          string option_value(argv[args_processed]);
+          args_processed++;
+
+          if (is_number(option_value))
+          {
+            load_factor = stoi(option_value);
           }
           else
           {
@@ -485,6 +515,13 @@ int main(int argc, char **argv)
   {
     print_and_file("Exiting...\n");
     return 1;
+  }
+
+  //recalculate ACF table size if load factor is used
+  if (load_factor > 0)
+  {
+    int expected_buckets = ceil((double)ip_blacklist_keys.size() / ((double)load_factor / 100));
+    ht_size = ceil((double)expected_buckets / (double)(num_way * num_cells));
   }
 
   //Starting AFC
