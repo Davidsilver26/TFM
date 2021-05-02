@@ -46,7 +46,7 @@ $ ./acf_ip_4x1 -b blacklists/listed_ip_180.txt -w whitelists/500K_listed_ip_180.
 ```
 Output:
 ```
-./acf_ip_4x1 -b blacklists/listed_ip_180.txt -w whitelists/500K_listed_ip_180.txt -f 9 -s 3 -l 95 -v -o aaa.txt 
+./acf_ip_4x1 -b blacklists/listed_ip_180.txt -w whitelists/500K_listed_ip_180.txt -f 9 -s 3 -l 95 -v
 
 Reading blacklists/listed_ip_180.txt
 [==================================================] 100%
@@ -106,7 +106,7 @@ $ ./acf_ip_2x4 -b blacklists/listed_ip_180.txt -w whitelists/500K_listed_ip_180.
 ```
 Output:
 ```
-./acf_ip_2x4 -b blacklists/listed_ip_180.txt -w whitelists/500K_listed_ip_180.txt -f 9 -m 43000 
+./acf_ip_2x4 -b blacklists/listed_ip_180.txt -w whitelists/500K_listed_ip_180.txt -f 9 -m 43000
 
 Reading blacklists/listed_ip_180.txt
 Reading whitelists/500K_listed_ip_180.txt
