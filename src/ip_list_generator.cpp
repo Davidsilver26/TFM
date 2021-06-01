@@ -15,6 +15,9 @@ const int64_t global_ips = 4294967296; //IPv4 address space
 const int prog_bar_size = 50;
 string prog_bar;
 
+//random seed
+int seed = 0;
+
 
 //read a complete file (skip empty lines)
 vector<string> read_lines(ifstream & infile){
@@ -128,9 +131,9 @@ int main(int argc, char **argv){
   print_command_line(argc,argv); //print the command line with the option
 
   //check arguments
-  if(argc != 4){ // program name + arguments
+  if(argc != 5){ // program name + arguments
     cout << "Invalid usage" << endl;
-    cout << "Usage: " << argv[0] << " <number IPs> <exclude list> <output file>" << endl;
+    cout << "Usage: " << argv[0] << " <number IPs> <exclude list> <output file> <seed>" << endl;
     return 1;
   }
 
@@ -138,6 +141,7 @@ int main(int argc, char **argv){
   const string exclude_list = argv[2];
   const string output_file = argv[3];
   const int total_ips = stoi(argv[1]);
+  seed = stoi(argv[4]);
 
   //read exclude list file
   ifstream infile_exclude_list(exclude_list);
@@ -175,7 +179,6 @@ int main(int argc, char **argv){
   const int max_jump = (global_ips / total_ips) * (2 * 0.9);
   ofstream outfile(output_file);
 
-  int seed = 12342;
   srand(seed);
 
   int value1 = 0, value2 = 0, value3 = 0, value4 = 0;
