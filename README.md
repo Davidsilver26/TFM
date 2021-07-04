@@ -1,4 +1,4 @@
-# ACF for IPs
+# ACF for IP blacklists
 
 This repository contains the code to run the Adaptive Cuckoo Filter with IPs of IPv4. The code is base on Adaptive Cuckoo Filter simulator code (avaiable in https://github.com/pontarelli/ACF).
 
